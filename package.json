@@ -1,0 +1,18 @@
+{
+  "name": "@nyne/openclaw-nyne",
+  "version": "0.1.0",
+  "description": "Nyne people intelligence plugin for OpenClaw",
+  "type": "module",
+  "main": "index.ts",
+  "license": "MIT",
+  "dependencies": {
+    "@clack/prompts": "^1.0.0",
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.1.29"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

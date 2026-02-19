@@ -1,0 +1,50 @@
+{
+  "id": "openclaw-nyne",
+  "kind": "enrichment",
+  "uiHints": {
+    "apiKey": {
+      "label": "Nyne API Key",
+      "sensitive": true,
+      "placeholder": "your-api-key",
+      "help": "Your API key from nyne.ai (or use ${NYNE_API_KEY})"
+    },
+    "apiSecret": {
+      "label": "Nyne API Secret",
+      "sensitive": true,
+      "placeholder": "your-api-secret",
+      "help": "Your API secret from nyne.ai (or use ${NYNE_API_SECRET})"
+    },
+    "debug": {
+      "label": "Debug Logging",
+      "help": "Enable verbose debug logs for API calls and responses",
+      "advanced": true
+    },
+    "defaultPollTimeout": {
+      "label": "Poll Timeout (seconds)",
+      "placeholder": "60",
+      "help": "Maximum time to wait for async API results (default: 60s)",
+      "advanced": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiKey": {
+        "type": "string"
+      },
+      "apiSecret": {
+        "type": "string"
+      },
+      "debug": {
+        "type": "boolean"
+      },
+      "defaultPollTimeout": {
+        "type": "number",
+        "minimum": 10,
+        "maximum": 300
+      }
+    },
+    "required": []
+  }
+}
