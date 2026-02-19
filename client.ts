@@ -93,22 +93,26 @@ export class NyneClient {
   }
 
   async searchPeople(params: {
-    company_name?: string
-    role?: string
-    geography?: string
-    person_name?: string
-    college?: string
-    tenure?: number
-    keywords?: string
-    high_connection_count?: boolean
+    query: string
     limit?: number
-    page?: number
-    exact_match?: boolean
-    enrich_results?: boolean
+    offset?: number
+    type?: "light" | "medium" | "premium"
+    show_emails?: boolean
+    show_phone_numbers?: boolean
+    require_emails?: boolean
+    require_phone_numbers?: boolean
+    insights?: boolean
+    high_freshness?: boolean
+    profile_scoring?: boolean
+    custom_filters?: Record<string, unknown>
   }): Promise<Record<string, unknown>> {
     const postRes = await this.request("/person/search", "POST", params as Record<string, unknown>)
-    const requestId = (postRes.data as Record<string, unknown>)?.request_id as string
+    const data = postRes.data as Record<string, unknown> | undefined
 
+    // Search may return completed immediately or need polling
+    if (data?.status === "completed") return postRes
+
+    const requestId = data?.request_id as string
     if (!requestId) return postRes
 
     return this.waitForResult(requestId, "search")
@@ -119,8 +123,14 @@ export class NyneClient {
     linkedin_url?: string
     phone?: string
     social_media_url?: string
+    name?: string
+    company?: string
+    city?: string
     newsfeed?: string | string[]
     lite_enrich?: boolean
+    ai_enhanced_search?: boolean
+    strict_email_check?: boolean
+    probability_score?: boolean
   }): Promise<Record<string, unknown>> {
     // Map linkedin_url to social_media_url if provided
     const body: Record<string, unknown> = { ...params }

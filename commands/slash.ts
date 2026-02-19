@@ -39,15 +39,16 @@ export function registerCommands(
         const person = (data?.result ?? data) as Record<string, unknown>
 
         const lines: string[] = []
-        if (person.full_name) lines.push(`**${person.full_name}**`)
-        if (person.headline) lines.push(String(person.headline))
+        const name = person.displayname ?? [person.firstname, person.lastname].filter(Boolean).join(" ")
+        if (name) lines.push(`**${name}**`)
+        if (person.bio) lines.push(String(person.bio))
         if (person.location) lines.push(`Location: ${person.location}`)
-        if (person.best_email) lines.push(`Email: ${person.best_email}`)
+        const emails = person.altemails as string[] | undefined
+        if (emails?.length) lines.push(`Email: ${emails[0]}`)
 
-        const careers = person.careers_info as Array<Record<string, unknown>> | undefined
-        if (careers?.length) {
-          const current = careers.find((c) => c.is_current)
-          if (current) lines.push(`Current: ${current.title} at ${current.company_name}`)
+        const orgs = person.organizations as Array<Record<string, unknown>> | undefined
+        if (orgs?.length) {
+          lines.push(`Current: ${orgs[0].title} at ${orgs[0].name}`)
         }
 
         return { text: lines.length > 0 ? lines.join("\n") : JSON.stringify(person, null, 2) }
@@ -61,50 +62,28 @@ export function registerCommands(
   // /search <natural language query>
   api.registerCommand({
     name: "search",
-    description: "Search for people (e.g., /search CTO at Stripe in San Francisco)",
+    description: "Search for people (e.g., /search VP of Sales at fintech startups in NYC)",
     acceptsArgs: true,
     requireAuth: false,
     handler: async (ctx) => {
       const input = ctx.args?.trim()
       if (!input) {
-        return { text: "Usage: /search <criteria> (e.g., 'CTO at Stripe in San Francisco')" }
+        return { text: "Usage: /search <query> (e.g., 'VP of Sales at fintech startups in NYC')" }
       }
 
       try {
-        // Simple natural language parsing
-        const params: Record<string, string | number | boolean> = {}
-
-        const atMatch = input.match(/(?:at|@)\s+(.+?)(?:\s+in\s+|\s*$)/i)
-        if (atMatch) params.company_name = atMatch[1].trim()
-
-        const inMatch = input.match(/\s+in\s+(.+?)$/i)
-        if (inMatch) params.geography = inMatch[1].trim()
-
-        // Everything before "at" is the role
-        const roleMatch = input.match(/^(.+?)\s+(?:at|@)\s+/i)
-        if (roleMatch) {
-          params.role = roleMatch[1].trim()
-        } else if (!atMatch && !inMatch) {
-          // If no structure detected, treat as person_name
-          params.person_name = input
-        }
-
-        if (!params.company_name && !params.role && !params.geography && !params.person_name) {
-          params.person_name = input
-        }
-
-        const result = await client.searchPeople(params as Parameters<typeof client.searchPeople>[0])
+        const result = await client.searchPeople({ query: input, limit: 10 })
         const data = result.data as Record<string, unknown> | undefined
-        const profiles = (data?.result ?? data?.results ?? []) as Array<Record<string, unknown>>
+        const profiles = (data?.results ?? []) as Array<Record<string, unknown>>
 
         if (!Array.isArray(profiles) || profiles.length === 0) {
           return { text: "No people found." }
         }
 
         const lines = profiles.slice(0, 10).map((p, i) => {
-          const name = p.full_name ?? p.name ?? "Unknown"
-          const title = p.headline ?? p.title ?? ""
-          return `${i + 1}. **${name}**${title ? ` — ${title}` : ""}`
+          const name = p.displayname ?? p.full_name ?? p.name ?? "Unknown"
+          const headline = p.headline ?? ""
+          return `${i + 1}. **${name}**${headline ? ` — ${headline}` : ""}`
         })
 
         return { text: `Found ${profiles.length} people:\n\n${lines.join("\n")}` }

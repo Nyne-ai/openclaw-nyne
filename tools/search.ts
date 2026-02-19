@@ -14,43 +14,39 @@ export function registerSearchTool(
       name: "nyne_search_people",
       label: "Search People",
       description:
-        "Search for people by company, role, geography, name, college, tenure, or keywords. Returns LinkedIn profiles matching the criteria. At least one of company_name, role, geography, or person_name is required.",
+        "Search for people using natural language queries. Examples: 'VP of Sales at fintech startups in New York', 'machine learning engineers at Google with 5+ years experience'. Returns matching professional profiles with contact info.",
       parameters: Type.Object({
-        company_name: Type.Optional(Type.String({ description: "Company name" })),
-        role: Type.Optional(Type.String({ description: "Job role or title" })),
-        geography: Type.Optional(Type.String({ description: "Location (city, state, country)" })),
-        person_name: Type.Optional(Type.String({ description: "Person's name" })),
-        college: Type.Optional(Type.String({ description: "College or university" })),
-        tenure: Type.Optional(Type.Number({ description: "Years at current job (1-50)" })),
-        keywords: Type.Optional(Type.String({ description: "Additional keywords" })),
-        high_connection_count: Type.Optional(Type.Boolean({ description: "Only people with 500+ connections" })),
-        limit: Type.Optional(Type.Number({ description: "Max results (default: 50, max: 100)" })),
-        exact_match: Type.Optional(Type.Boolean({ description: "Exact phrase matching" })),
-        enrich_results: Type.Optional(Type.Boolean({ description: "Also enrich found profiles" })),
+        query: Type.String({ description: "Natural language description of target people (max 1000 chars)" }),
+        limit: Type.Optional(Type.Number({ description: "Results per request (default: 10, max: 100)" })),
+        show_emails: Type.Optional(Type.Boolean({ description: "Include email addresses (costs 2 extra credits per result)" })),
+        show_phone_numbers: Type.Optional(Type.Boolean({ description: "Include phone numbers (costs 14 extra credits per result)" })),
+        insights: Type.Optional(Type.Boolean({ description: "Include AI-generated relevance insights" })),
+        profile_scoring: Type.Optional(Type.Boolean({ description: "Add AI relevance scores to results" })),
+        type: Type.Optional(
+          Type.Union([Type.Literal("light"), Type.Literal("medium"), Type.Literal("premium")], {
+            description: "Search tier: light (1 credit), medium, premium (5 credits, default)",
+          }),
+        ),
       }),
       async execute(
         _toolCallId: string,
         params: {
-          company_name?: string
-          role?: string
-          geography?: string
-          person_name?: string
-          college?: string
-          tenure?: number
-          keywords?: string
-          high_connection_count?: boolean
+          query: string
           limit?: number
-          exact_match?: boolean
-          enrich_results?: boolean
+          show_emails?: boolean
+          show_phone_numbers?: boolean
+          insights?: boolean
+          profile_scoring?: boolean
+          type?: "light" | "medium" | "premium"
         },
       ) {
-        if (!params.company_name && !params.role && !params.geography && !params.person_name) {
+        if (!params.query?.trim()) {
           return {
-            content: [{ type: "text" as const, text: "Error: At least one of company_name, role, geography, or person_name is required." }],
+            content: [{ type: "text" as const, text: "Error: A search query is required." }],
           }
         }
 
-        log.debug(`search tool: ${JSON.stringify(params)}`)
+        log.debug(`search tool: query="${params.query}"`)
 
         try {
           const result = await client.searchPeople(params)
@@ -62,7 +58,7 @@ export function registerSearchTool(
             }
           }
 
-          const profiles = (data.result ?? data.results ?? []) as Array<Record<string, unknown>>
+          const profiles = (data.results ?? []) as Array<Record<string, unknown>>
 
           if (!Array.isArray(profiles) || profiles.length === 0) {
             return {
@@ -70,26 +66,35 @@ export function registerSearchTool(
             }
           }
 
-          const lines = profiles.slice(0, 20).map((p, i) => {
-            const name = p.full_name ?? p.name ?? "Unknown"
-            const title = p.headline ?? p.title ?? ""
-            const company = p.company_name ?? p.company ?? ""
+          const totalEstimate = data.total_estimate as number | undefined
+          const lines = profiles.slice(0, 25).map((p, i) => {
+            const name = p.displayname ?? p.full_name ?? p.name ?? "Unknown"
+            const headline = p.headline ?? ""
             const location = p.location ?? ""
-            const linkedin = p.linkedin_url ?? p.url ?? ""
+            const email = p.best_business_email ?? p.best_personal_email ?? ""
+            const linkedin = (p.social_profiles as Record<string, Record<string, string>> | undefined)?.linkedin?.url ?? ""
+            const score = p.score as number | undefined
+            const insight = (p.insights as Record<string, string> | undefined)?.overall_summary
 
             let line = `${i + 1}. **${name}**`
-            if (title) line += ` — ${title}`
-            if (company) line += ` at ${company}`
+            if (headline) line += ` — ${headline}`
             if (location) line += ` (${location})`
+            if (score) line += ` [${Math.round(score * 100)}% match]`
+            if (email) line += `\n   Email: ${email}`
             if (linkedin) line += `\n   ${linkedin}`
+            if (insight) line += `\n   Insight: ${insight}`
             return line
           })
 
-          const text = `Found ${profiles.length} people:\n\n${lines.join("\n\n")}`
+          const header = totalEstimate
+            ? `Found ~${totalEstimate} people (showing ${profiles.length}):`
+            : `Found ${profiles.length} people:`
+
+          const text = `${header}\n\n${lines.join("\n\n")}`
 
           return {
             content: [{ type: "text" as const, text }],
-            details: { count: profiles.length, profiles },
+            details: { count: profiles.length, totalEstimate, profiles },
           }
         } catch (err) {
           log.error("search tool failed", err)

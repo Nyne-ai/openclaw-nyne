@@ -59,27 +59,28 @@ export function registerEnrichTool(
 
           const person = (data.result ?? data) as Record<string, unknown>
 
-          // Format a readable summary
+          // Format a readable summary — field names match actual API response
           const lines: string[] = []
-          if (person.full_name) lines.push(`**${person.full_name}**`)
-          if (person.headline) lines.push(`${person.headline}`)
+          const name = person.displayname ?? [person.firstname, person.lastname].filter(Boolean).join(" ")
+          if (name) lines.push(`**${name}**`)
+          if (person.bio) lines.push(`${person.bio}`)
           if (person.location) lines.push(`Location: ${person.location}`)
-          if (person.best_email) lines.push(`Email: ${person.best_email}`)
-          if (person.best_work_email && person.best_work_email !== person.best_email) {
-            lines.push(`Work Email: ${person.best_work_email}`)
+
+          const emails = person.altemails as string[] | undefined
+          if (emails?.length) {
+            lines.push(`Email: ${emails[0]}${emails.length > 1 ? ` (+${emails.length - 1} more)` : ""}`)
           }
 
-          const phones = person.phones as Array<Record<string, unknown>> | undefined
+          const phones = person.fullphone as Array<Record<string, unknown>> | undefined
           if (phones?.length) {
-            lines.push(`Phone: ${phones.map((p) => p.phone_number ?? p.number).join(", ")}`)
+            lines.push(`Phone: ${phones.map((p) => p.fullphone).join(", ")}`)
           }
 
-          const careers = person.careers_info as Array<Record<string, unknown>> | undefined
-          if (careers?.length) {
+          const orgs = person.organizations as Array<Record<string, unknown>> | undefined
+          if (orgs?.length) {
             lines.push("\n**Career:**")
-            for (const job of careers.slice(0, 5)) {
-              const current = job.is_current ? " (current)" : ""
-              lines.push(`- ${job.title} at ${job.company_name}${current}`)
+            for (const job of orgs.slice(0, 5)) {
+              lines.push(`- ${job.title} at ${job.name}${job.startDate ? ` (${job.startDate})` : ""}`)
             }
           }
 
@@ -87,14 +88,15 @@ export function registerEnrichTool(
           if (schools?.length) {
             lines.push("\n**Education:**")
             for (const school of schools.slice(0, 3)) {
-              lines.push(`- ${school.school_name}${school.degree ? ` — ${school.degree}` : ""}`)
+              lines.push(`- ${school.name}${school.degree ? ` — ${school.degree} ${school.title ?? ""}` : ""}`)
             }
           }
 
-          const socials = person.social_profiles as Record<string, string> | undefined
+          const socials = person.social_profiles as Record<string, Record<string, string>> | undefined
           if (socials && Object.keys(socials).length > 0) {
             lines.push("\n**Social Profiles:**")
-            for (const [platform, url] of Object.entries(socials)) {
+            for (const [platform, profile] of Object.entries(socials)) {
+              const url = typeof profile === "string" ? profile : profile?.url
               if (url) lines.push(`- ${platform}: ${url}`)
             }
           }
